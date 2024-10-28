@@ -200,12 +200,12 @@ CREATE INDEX idx_user_preferences_user_website ON user_preferences(user_id, webs
 ```
 
 ### 自动更新触发器：
-已为所有表创建updated_at自动更新触发器
+已为所有表创建 updated_at 自动更新触发器。
 
 ## 5. 数据库备份方法
 ### 创建完整备份：
 ```bash
-# 创建SQL备份
+# 创建 SQL 备份
 pg_dump -U poording -d web_automation > web_automation_backup.sql
 
 # 创建自定义格式备份（推荐）
@@ -214,7 +214,7 @@ pg_dump -U poording -d web_automation -Fc > web_automation_backup.dump
 
 ### 恢复备份：
 ```bash
-# 恢复SQL备份
+# 恢复 SQL 备份
 psql -U poording -d web_automation < web_automation_backup.sql
 
 # 恢复自定义格式备份
@@ -222,7 +222,53 @@ pg_restore -U poording -d web_automation web_automation_backup.dump
 ```
 
 ## 6. 下一步计划
-- [ ] 创建测试数据
-- [ ] 编写Python连接代码
-- [ ] 创建常用视图
-- [ ] 实现基本的CRUD操作
+- [x] 创建测试数据（已完成基础测试数据）
+- [ ] 编写 Python 连接代码
+- [x] 创建常用视图（已完成 workflow_details 和 user_activities 视图）
+- [ ] 实现基本的 CRUD 操作
+
+## 5. 已创建的视图
+### workflow_details
+```sql
+CREATE VIEW workflow_details AS
+SELECT 
+    w.id as workflow_id,
+    w.name as workflow_name,
+    u.username,
+    ws.name as website_name,
+    ws.url as website_url,
+    array_agg(a.name ORDER BY wst.step_order) as action_sequence
+FROM workflows w
+JOIN users u ON w.user_id = u.id
+JOIN websites ws ON w.website_id = ws.id
+JOIN workflow_steps wst ON w.id = wst.workflow_id
+JOIN actions a ON wst.action_id = a.id
+GROUP BY w.id, w.name, u.username, ws.name, ws.url;
+```
+
+### user_activities
+```sql
+CREATE VIEW user_activities AS
+SELECT 
+    u.username,
+    count(DISTINCT w.id) as workflow_count,
+    count(DISTINCT wp.website_id) as website_count,
+    max(w.created_at) as last_activity
+FROM users u
+LEFT JOIN workflows w ON u.id = w.user_id
+LEFT JOIN user_preferences wp ON u.id = wp.user_id
+GROUP BY u.id, u.username;
+```
+
+## 7. 测试数据状态
+### websites
+- 测试网站1 (https://example1.com)
+- 测试网站2 (https://example2.com)
+
+### users
+- testuser1 (test1@example.com)
+- testuser2 (test2@example.com)
+
+### workflows
+- 登录流程 (testuser1)
+- 注册流程 (testuser2)
