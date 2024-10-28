@@ -223,11 +223,11 @@ pg_restore -U poording -d web_automation web_automation_backup.dump
 
 ## 6. 下一步计划
 - [x] 创建测试数据（已完成基础测试数据）
-- [ ] 编写 Python 连接代码
+- [x] 编写 Python 连接代码
 - [x] 创建常用视图（已完成 workflow_details 和 user_activities 视图）
 - [ ] 实现基本的 CRUD 操作
 
-## 5. 已创建的视图
+## 7. 已创建的视图
 ### workflow_details
 ```sql
 CREATE VIEW workflow_details AS
@@ -260,7 +260,7 @@ LEFT JOIN user_preferences wp ON u.id = wp.user_id
 GROUP BY u.id, u.username;
 ```
 
-## 7. 测试数据状态
+## 8. 测试数据状态
 ### websites
 - 测试网站1 (https://example1.com)
 - 测试网站2 (https://example2.com)
