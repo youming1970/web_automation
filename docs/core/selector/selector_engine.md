@@ -186,75 +186,7 @@ async def handle_selector_error(error: SelectorError, selector_data: dict):
         )
         if new_selector:
             await selector_updater.update_selector(
-                selector_data['id'], 
+                selector_data['id'],
                 new_selector[0][1]
             )
-```
-
-## 六、性能优化
-
-### 6.1 缓存策略
-```python
-class SelectorCache:
-    def __init__(self, max_size=1000):
-        self.cache = {}
-        self.max_size = max_size
-
-    def get(self, key: str):
-        """获取缓存的选择器"""
-        return self.cache.get(key)
-
-    def set(self, key: str, value: str):
-        """缓存选择器"""
-        if len(self.cache) >= self.max_size:
-            # 移除最旧的项
-            self.cache.pop(next(iter(self.cache)))
-        self.cache[key] = value
-```
-
-### 6.2 批量操作优化
-```python
-class BatchSelectorOperation:
-    def __init__(self, page):
-        self.page = page
-
-    async def validate_multiple(self, selectors: list):
-        """批量验证选择器"""
-        results = []
-        for selector in selectors:
-            valid = await self.page.evaluate(f"""
-                !!document.querySelector("{selector}")
-            """)
-            results.append(valid)
-        return results
-```
-
-## 七、监控和日志
-
-### 7.1 性能监控
-```python
-class SelectorMetrics:
-    def __init__(self):
-        self.metrics = defaultdict(list)
-
-    async def record_selector_performance(self, selector_id: int, duration: float):
-        """记录选择器性能指标"""
-        self.metrics[selector_id].append({
-            'duration': duration,
-            'timestamp': datetime.now()
-        })
-```
-
-### 7.2 日志记录
-```python
-class SelectorLogger:
-    def __init__(self):
-        self.logger = logging.getLogger('selector_engine')
-
-    def log_selector_error(self, error: Exception, selector_data: dict):
-        """记录选择器错误"""
-        self.logger.error(f"Selector error: {str(error)}", extra={
-            'selector_id': selector_data['id'],
-            'selector_value': selector_data['value']
-        })
 ```
