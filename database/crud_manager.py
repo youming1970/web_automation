@@ -1,5 +1,7 @@
 from .db_manager import DatabaseManager
 from typing import Dict, Any, Optional, List
+import time
+import logging
 
 class CRUDManager:
     def __init__(self):
@@ -7,9 +9,16 @@ class CRUDManager:
         初始化 CRUD 管理器
         """
         self.db = DatabaseManager()
+        self._connected = False
+
+    async def ensure_connected(self):
+        """确保数据库已连接"""
+        if not self._connected:
+            await self.db.connect()
+            self._connected = True
 
     # 网站相关操作
-    def create_website(self, name: str, url: str) -> Dict[str, Any]:
+    async def create_website(self, name: str, url: str) -> Dict[str, Any]:
         """
         创建新网站
         
@@ -17,24 +26,36 @@ class CRUDManager:
         :param url: 网站 URL
         :return: 创建的网站信息
         """
+        await self.ensure_connected()
         query = """
         INSERT INTO websites (name, url)
-        VALUES (%s, %s)
+        VALUES ($1, $2)
         RETURNING *
         """
-        return self.db.fetch_one(query, (name, url))
+        return await self.db.fetch_one(query, (name, url))
 
-    def get_website(self, website_id: int) -> Dict[str, Any]:
+    async def get_website(self, website_id: int) -> Dict[str, Any]:
         """
         获取指定网站信息
         
         :param website_id: 网站 ID
         :return: 网站信息
         """
-        query = "SELECT * FROM websites WHERE id = %s"
-        return self.db.fetch_one(query, (website_id,))
+        await self.ensure_connected()
+        query = "SELECT * FROM websites WHERE id = $1"
+        return await self.db.fetch_one(query, (website_id,))
 
-    def update_website(self, website_id: int, name: Optional[str] = None, 
+    async def get_all_websites(self) -> List[Dict[str, Any]]:
+        """
+        获取所有网站信息
+        
+        :return: 网站信息列表
+        """
+        await self.ensure_connected()
+        query = "SELECT * FROM websites"
+        return await self.db.fetch_all(query)
+
+    async def update_website(self, website_id: int, name: Optional[str] = None, 
                        url: Optional[str] = None, description: Optional[str] = None) -> Dict[str, Any]:
         """
         更新网站信息
@@ -45,18 +66,23 @@ class CRUDManager:
         :param description: 新的网站描述
         :return: 更新后的网站信息
         """
+        await self.ensure_connected()
         updates = []
         params = []
+        param_count = 1
         
         if name is not None:
-            updates.append("name = %s")
+            updates.append(f"name = ${param_count}")
             params.append(name)
+            param_count += 1
         if url is not None:
-            updates.append("url = %s")
+            updates.append(f"url = ${param_count}")
             params.append(url)
+            param_count += 1
         if description is not None:
-            updates.append("description = %s")
+            updates.append(f"description = ${param_count}")
             params.append(description)
+            param_count += 1
         
         if not updates:
             return None
@@ -65,20 +91,21 @@ class CRUDManager:
         query = f"""
         UPDATE websites 
         SET {', '.join(updates)}
-        WHERE id = %s
+        WHERE id = ${param_count}
         RETURNING *
         """
-        return self.db.fetch_one(query, tuple(params))
+        return await self.db.fetch_one(query, tuple(params))
 
-    def delete_website(self, website_id: int) -> bool:
+    async def delete_website(self, website_id: int) -> bool:
         """
         删除网站
         
         :param website_id: 网站 ID
         :return: 是否删除成功
         """
-        query = "DELETE FROM websites WHERE id = %s"
-        self.db.execute_query(query, (website_id,))
+        await self.ensure_connected()
+        query = "DELETE FROM websites WHERE id = $1"
+        await self.db.execute_query(query, (website_id,))
         return True
 
     # 选择器相关操作
@@ -121,8 +148,19 @@ class CRUDManager:
         query = "SELECT * FROM selectors WHERE website_id = %s"
         return self.db.fetch_all(query, (website_id,))
 
+    def delete_selector(self, selector_id: int) -> bool:
+        """
+        删除选择器
+        
+        :param selector_id: 选择器 ID
+        :return: 是否删除成功
+        """
+        query = "DELETE FROM selectors WHERE id = %s"
+        self.db.execute_query(query, (selector_id,))
+        return True
+
     # 工作流相关操作
-    def create_workflow(self, name: str, user_id: int, website_id: int, 
+    async def create_workflow(self, name: str, user_id: int, website_id: int, 
                         description: Optional[str] = None) -> Dict[str, Any]:
         """
         创建工作流
@@ -133,70 +171,99 @@ class CRUDManager:
         :param description: 工作流描述
         :return: 创建的工作流信息
         """
+        await self.ensure_connected()
+        start_time = time.time()
+        logging.info(f"开始创建工作流: {name}")
+
         query = """
         INSERT INTO workflows (name, user_id, website_id, description)
-        VALUES (%s, %s, %s, %s)
+        VALUES ($1, $2, $3, $4)
         RETURNING *
         """
-        return self.db.fetch_one(query, (name, user_id, website_id, description))
+        workflow = await self.db.fetch_one(query, (name, user_id, website_id, description))
 
-    def get_workflow(self, workflow_id: int) -> Dict[str, Any]:
+        end_time = time.time()
+        duration = end_time - start_time
+        logging.info(f"工作流创建完成: {name} (ID: {workflow['id']}), 耗时: {duration:.4f} 秒")
+
+        return workflow
+
+    async def get_workflow(self, workflow_id: int) -> Dict[str, Any]:
         """
         获取工作流信息
         
         :param workflow_id: 工作流 ID
         :return: 工作流信息
         """
-        query = "SELECT * FROM workflows WHERE id = %s"
-        return self.db.fetch_one(query, (workflow_id,))
+        await self.ensure_connected()
+        query = "SELECT * FROM workflows WHERE id = $1"
+        return await self.db.fetch_one(query, (workflow_id,))
 
-    def get_user_workflows(self, user_id: int) -> List[Dict[str, Any]]:
+    async def get_all_workflows(self) -> List[Dict[str, Any]]:
+        """
+        获取所有工作流
+        
+        :return: 工作流列表
+        """
+        await self.ensure_connected()
+        query = "SELECT * FROM workflows"
+        return await self.db.fetch_all(query)
+
+    async def get_user_workflows(self, user_id: int) -> List[Dict[str, Any]]:
         """
         获取用户的所有工作流
         
         :param user_id: 用户 ID
         :return: 工作流列表
         """
-        query = "SELECT * FROM workflows WHERE user_id = %s"
-        return self.db.fetch_all(query, (user_id,))
+        await self.ensure_connected()
+        query = "SELECT * FROM workflows WHERE user_id = $1"
+        return await self.db.fetch_all(query, (user_id,))
 
-    def add_workflow_step(self, workflow_id: int, step_order: int, action_type: str, 
-                          selector_id: Optional[int] = None, value: Optional[str] = None) -> Dict[str, Any]:
+    async def add_workflow_step(self, workflow_id: int, step_order: int, action_type: str, 
+                          selector_type: Optional[str] = None, selector_value: Optional[str] = None,
+                          value: Optional[str] = None, description: Optional[str] = None) -> Dict[str, Any]:
         """
         为工作流添加步骤
         
         :param workflow_id: 工作流 ID
         :param step_order: 步骤顺序
         :param action_type: 动作类型
-        :param selector_id: 选择器 ID
+        :param selector_type: 选择器类型
+        :param selector_value: 选择器值
         :param value: 动作值
+        :param description: 步骤描述
         :return: 创建的工作流步骤信息
         """
+        await self.ensure_connected()
         query = """
-        INSERT INTO workflow_steps (workflow_id, step_order, action_type, selector_id, value)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO workflow_steps 
+        (workflow_id, step_order, action_type, selector_type, selector_value, value, description)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING *
         """
-        return self.db.fetch_one(query, (workflow_id, step_order, action_type, selector_id, value))
+        return await self.db.fetch_one(query, (
+            workflow_id, step_order, action_type, selector_type,
+            selector_value, value, description
+        ))
 
-    def get_workflow_steps(self, workflow_id: int) -> List[Dict[str, Any]]:
+    async def get_workflow_steps(self, workflow_id: int) -> List[Dict[str, Any]]:
         """
         获取工作流的所有步骤
         
         :param workflow_id: 工作流 ID
         :return: 工作流步骤列表
         """
+        await self.ensure_connected()
         query = """
-        SELECT ws.*, s.selector_type, s.selector_value 
-        FROM workflow_steps ws
-        LEFT JOIN selectors s ON ws.selector_id = s.id
-        WHERE ws.workflow_id = %s
-        ORDER BY ws.step_order
+        SELECT * FROM workflow_steps
+        WHERE workflow_id = $1
+        ORDER BY step_order
         """
-        return self.db.fetch_all(query, (workflow_id,))
+        return await self.db.fetch_all(query, (workflow_id,))
 
     # 用户相关操作
-    def create_user(self, username: str, email: str, password_hash: str) -> Dict[str, Any]:
+    async def create_user(self, username: str, email: str, password_hash: str) -> Dict[str, Any]:
         """
         创建新用户
         
@@ -205,24 +272,26 @@ class CRUDManager:
         :param password_hash: 密码哈希
         :return: 创建的用户信息
         """
+        await self.ensure_connected()
         query = """
         INSERT INTO users (username, email, password_hash)
-        VALUES (%s, %s, %s)
+        VALUES ($1, $2, $3)
         RETURNING *
         """
-        return self.db.fetch_one(query, (username, email, password_hash))
+        return await self.db.fetch_one(query, (username, email, password_hash))
 
-    def get_user(self, user_id: int) -> Dict[str, Any]:
+    async def get_user(self, user_id: int) -> Dict[str, Any]:
         """
         获取用户信息
         
         :param user_id: 用户 ID
         :return: 用户信息
         """
-        query = "SELECT * FROM users WHERE id = %s"
-        return self.db.fetch_one(query, (user_id,))
+        await self.ensure_connected()
+        query = "SELECT * FROM users WHERE id = $1"
+        return await self.db.fetch_one(query, (user_id,))
 
-    def update_user(self, user_id: int, username: Optional[str] = None, 
+    async def update_user(self, user_id: int, username: Optional[str] = None, 
                     email: Optional[str] = None, role: Optional[str] = None) -> Dict[str, Any]:
         """
         更新用户信息
@@ -233,6 +302,7 @@ class CRUDManager:
         :param role: 新的用户角色
         :return: 更新后的用户信息
         """
+        await self.ensure_connected()
         updates = []
         params = []
         
@@ -256,18 +326,76 @@ class CRUDManager:
         WHERE id = %s
         RETURNING *
         """
-        return self.db.fetch_one(query, tuple(params))
+        return await self.db.fetch_one(query, tuple(params))
 
-    def delete_user(self, user_id: int) -> bool:
+    async def delete_workflow(self, workflow_id: int) -> bool:
         """
-        删除用户
+        删除工作流及其所有步骤
         
-        :param user_id: 用户 ID
+        :param workflow_id: 工作流 ID
         :return: 是否删除成功
         """
-        query = "DELETE FROM users WHERE id = %s"
-        self.db.execute_query(query, (user_id,))
-        return True
+        try:
+            async with self.db.transaction() as transaction:
+                # 先删除工作流的所有步骤
+                query = """
+                DELETE FROM workflow_steps
+                WHERE workflow_id = $1
+                """
+                await self.db.execute(query, (workflow_id,))
+                
+                # 再删除工作流本身
+                query = """
+                DELETE FROM workflows
+                WHERE id = $1
+                """
+                await self.db.execute(query, (workflow_id,))
+                return True
+        except Exception as e:
+            logging.error(f"删除工作流失败: {e}")
+            raise
+
+    async def delete_user_workflows(self, user_id: int) -> None:
+        """删除用户的所有工作流"""
+        try:
+            # 开启事务
+            async with self.db.transaction() as transaction:
+                # 先删除工作流的步骤
+                query = """
+                DELETE FROM workflow_steps
+                WHERE workflow_id IN (
+                    SELECT id FROM workflows WHERE user_id = $1
+                )
+                """
+                await self.db.execute(query, (user_id,))
+                
+                # 再删除工作流
+                query = """
+                DELETE FROM workflows
+                WHERE user_id = $1
+                """
+                await self.db.execute(query, (user_id,))
+        except Exception as e:
+            logging.error(f"删除用户工作流失败: {e}")
+            raise
+
+    async def delete_user(self, user_id: int) -> None:
+        """删除用户"""
+        try:
+            # 开启事务
+            async with self.db.transaction() as transaction:
+                # 先删除用户的工作流
+                await self.delete_user_workflows(user_id)
+                
+                # 再删除用户
+                query = """
+                DELETE FROM users
+                WHERE id = $1
+                """
+                await self.db.execute(query, (user_id,))
+        except Exception as e:
+            logging.error(f"删除用户失败: {e}")
+            raise
 
     # 动作相关操作
     def create_action(self, website_id: int, name: str, action_type: str, 
@@ -352,14 +480,24 @@ class CRUDManager:
         """
         return self.db.fetch_all(query, (user_id, website_id))
 
-    def close(self):
-        """
-        关闭数据库连接
-        """
-        self.db.close()
+    async def close(self):
+        """关闭数据库连接"""
+        await self.db.close()
+        self._connected = False
 
-    def __enter__(self):
+    async def __aenter__(self):
+        """异步上下文管理器入口"""
+        await self.ensure_connected()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """异步上下文管理器出口"""
+        await self.close()
+
+    async def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """根据用户名获取用户"""
+        query = """
+        SELECT * FROM users
+        WHERE username = $1
+        """
+        return await self.db.fetch_one(query, (username,))

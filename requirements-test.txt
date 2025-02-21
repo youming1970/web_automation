@@ -1,0 +1,10 @@
+pytest==8.3.4
+pytest-qt==4.4.0
+pytest-asyncio==0.25.3
+pytest-cov==6.0.0
+pytest-mock==3.14.0
+pytest-xvfb==3.0.0  # 用于无头UI测试
+pytest-timeout==2.2.0
+pytest-repeat==0.9.1
+pytest-ordering==0.6
+coverage==7.3.2 

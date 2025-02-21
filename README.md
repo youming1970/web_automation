@@ -1,38 +1,35 @@
 # Web Survey Automation Tool
 
-这是一个用于自动化网上调查的工具，使用 PostgreSQL 和 Python 实现。
+这是一个用于自动化网上调查的工具，使用 PostgreSQL、Python 和 PyQt5 实现。该工具提供了图形用户界面，支持工作流的创建、编辑和执行。
 
 ## 项目结构
 ```
 web_automation/
 ├── core/
 │   ├── components/       # 核心组件
-│   │   ├── action/
-│   │   │   ├── __init__.py
-│   │   │   └── action_executor.py
-│   │   ├── selector/     # 选择器引擎相关代码
-│   │   │   ├── __init__.py
-│   │   │   └── selector_engine.py
-│   │   ├── browser/      # 浏览器管理器相关代码
-│   │   │   ├── __init__.py
-│   │   │   └── browser_manager.py
-│   │   ├── processor/    # 数据处理器相关代码
-│   │   │   ├── __init__.py
-│   │   │   └── data_processor.py
-├── database/
-│   ├── __init__.py
-│   ├── db_manager.py
-│   └── crud_manager.py
-├── docs/
-│   └── request.md
-├── test_connection.py
-└── README.md
+│   │   ├── action/      # 动作执行相关代码
+│   │   ├── selector/    # 选择器引擎相关代码
+│   │   ├── browser/     # 浏览器管理器相关代码
+│   │   ├── workflow/    # 工作流引擎相关代码
+│   │   └── processor/   # 数据处理器相关代码
+│   └── ui/             # 用户界面组件
+│       └── workflow_editor.py  # 工作流编辑器
+├── database/           # 数据库相关代码
+│   ├── db_manager.py   # 数据库连接管理
+│   └── crud_manager.py # CRUD操作管理
+├── tests/             # 测试代码
+│   └── test_workflow_editor.py # 工作流编辑器测试
+└── docs/              # 项目文档
 ```
 
 ## 环境要求
-- Python 3.13.0
+- Python 3.12.4
 - PostgreSQL 16.4
-- psycopg2-binary 2.9.10
+- PyQt5 5.15.11
+- pytest 8.3.4
+- pytest-qt 4.4.0
+- pytest-asyncio 0.25.3
+- asyncpg 0.29.0
 
 ## 快速开始
 
@@ -44,7 +41,8 @@ cd web_automation
 
 2. **安装依赖**
 ```bash
-pip install psycopg2-binary
+pip install -r requirements.txt
+pip install -r requirements-test.txt  # 如果需要运行测试
 ```
 
 3. **配置数据库**
@@ -59,139 +57,138 @@ GRANT ALL PRIVILEGES ON DATABASE web_automation TO poording;
 
 4. **运行测试**
 ```bash
-python test_connection.py
+PYTHONPATH=/path/to/web_automation pytest tests/test_workflow_editor.py -v
 ```
 
-## 使用说明
+## 主要功能
 
-### 数据库管理
+### 工作流编辑器
+工作流编辑器是一个图形用户界面工具，用于创建和管理自动化工作流。主要功能包括：
+
+1. **工作流管理**
+   - 创建新工作流
+   - 加载已有工作流
+   - 保存工作流
+   - 执行工作流
+
+2. **步骤编辑**
+   - 添加步骤
+   - 编辑步骤
+   - 删除步骤
+   - 拖拽排序
+
+3. **支持的动作类型**
+   - navigate: 导航到指定URL
+   - click: 点击元素
+   - input: 输入文本
+   - extract_text: 提取文本
+   - extract_attribute: 提取属性
+   - extract_html: 提取HTML
+   - extract_url: 提取URL
+   - extract_multiple: 提取多个元素
+   - wait: 等待
+   - scroll: 滚动
+
+### 选择器系统
+支持多种选择器类型：
+- CSS 选择器
+- XPath 选择器
+- ID 选择器
+- Name 选择器
+- Text 选择器
+
+### 异步操作
+- 所有数据库操作都是异步的
+- UI操作与后台任务分离
+- 支持长时间运行的工作流
+
+### 错误处理和日志
+- 详细的错误日志
+- 操作追踪
+- 异常恢复机制
+
+## 使用示例
+
+### 创建工作流
 ```python
-from database import DatabaseManager
+from core.ui.workflow_editor import WorkflowEditorWidget
+from PyQt5.QtWidgets import QApplication
+import sys
 
-# 创建数据库连接
-db = DatabaseManager()
-
-# 执行查询
-results = db.fetch_all("SELECT * FROM websites")
-
-# 关闭连接
-db.close()
+app = QApplication(sys.argv)
+editor = WorkflowEditorWidget()
+await editor.initialize()
+editor.show()
+sys.exit(app.exec_())
 ```
 
-### CRUD 操作
-```python
-from database import CRUDManager
-
-# 创建 CRUD 管理器
-crud = CRUDManager()
-
-# 获取所有网站
-websites = crud.get_all_websites()
-
-# 获取用户工作流
-workflows = crud.get_user_workflows(user_id=1)
-
-# 关闭连接
-crud.close()
-```
-
-### **自动化网上调查**
-
-本项目专注于自动化执行网上调查问卷。你可以配置调查问卷的 URL，以及需要自动填写的字段和选项，让程序自动完成问卷填写和提交。
-
-**使用步骤：**
-
-1.  **配置调查问卷信息：** 在数据库中添加调查问卷的 URL，并定义需要操作的元素选择器（例如问题、选项、提交按钮）。
-2.  **创建工作流：**  根据调查问卷的步骤，创建包含 `goto`, `click`, `input`, `select`, `radio`, `checkbox` 等动作的工作流。
-3.  **运行自动化脚本：**  执行 Python 脚本，程序将自动打开网页，填写问卷，并提交。
-
-**示例 (概念代码):**
-
+### 数据库操作
 ```python
 from database.crud_manager import CRUDManager
-from core.action.action_executor import ActionExecutor # 假设路径
 
-crud = CRUDManager()
-# 获取调查问卷配置 (假设 website_id = 1)
-website_config = crud.get_website(1)
-workflow = crud.get_website_workflows(website_config['id']) #  修正:  get_website_workflows 更贴切
-
-# 初始化动作执行器 (需要 page 对象，这里只是概念代码)
-action_executor = ActionExecutor() #  修正:  无需 page 对象在此初始化
-# await action_executor.execute_sequence(workflow, page) # 修正:  page 对象应在 execute_sequence 中传入，并设为异步
-
-print("自动化调查问卷已完成！")
+async def main():
+    crud = CRUDManager()
+    await crud.ensure_connected()
+    
+    # 创建工作流
+    workflow = await crud.create_workflow(
+        name="测试工作流",
+        user_id=1,
+        website_id=1,
+        description="这是一个测试工作流"
+    )
+    
+    # 添加步骤
+    await crud.add_workflow_step(
+        workflow_id=workflow['id'],
+        step_order=1,
+        action_type="click",
+        selector_type="css",
+        selector_value="#submit-button"
+    )
+    
+    await crud.close()
 ```
 
-## 下一步计划
-1. 实现完整的 CRUD 操作
-2. 添加数据验证
-3. 实现用户界面
-4. 编写单元测试
-5. **完善自动化调查问卷功能**
-    - **添加更多动作类型，例如 `select` (选择下拉框), `radio` (单选框), `checkbox` (复选框) 等**
-    - **[已完成]** 实现更灵活的选择器配置，支持多种选择器类型**
-        - CSS 选择器
-        - XPath 选择器
-        - ID 选择器
-        - Name 选择器
-        - Class 选择器
-    - **增加反爬虫机制应对策略，例如设置请求延迟，更换 User-Agent，使用代理 IP 等**
-    - **考虑验证码处理方案 (例如集成第三方验证码识别服务)**
-    - **[已完成]** 增加日志记录功能，方便调试和监控
-    - **[已完成]** 优化错误处理机制，提高程序的健壮性
+## 开发状态
 
-### 选择器系统特性
+### 已完成功能
+- [x] 基础数据库操作
+- [x] CRUD管理器
+- [x] 工作流编辑器UI
+- [x] 异步操作支持
+- [x] 测试框架集成
+- [x] 日志系统
 
-#### 支持的选择器类型
+### 进行中
+- [ ] 工作流执行引擎
+- [ ] 浏览器自动化集成
+- [ ] 验证码处理
+- [ ] 数据导出功能
 
-1. CSS 选择器
-   - 前缀：`css:` 或直接使用
-   - 示例：`css:.class-name`、`#element-id`
+### 计划中
+- [ ] 用户认证系统
+- [ ] 工作流模板
+- [ ] 批量操作支持
+- [ ] 性能优化
 
-2. XPath 选择器
-   - 前缀：`xpath:`
-   - 示例：`xpath://div[@class='example']`
+## 测试
+项目使用 pytest 进行测试，包括：
+- 单元测试
+- 集成测试
+- UI测试
 
-3. ID 选择器
-   - 前缀：`id:` 或 `#`
-   - 示例：`id:login-button`、`#username`
+运行测试：
+```bash
+# 运行所有测试
+pytest
 
-4. Name 选择器
-   - 前缀：`name:` 或 `[name=""]`
-   - 示例：`name:email`、`[name="password"]`
+# 运行特定测试
+pytest tests/test_workflow_editor.py
 
-5. Class 选择器
-   - 前缀：`class:` 或 `.`
-   - 示例：`class:btn-primary`、`.error-message`
-
-#### 选择器使用示例
-
-```python
-async def example_selector_usage():
-    selector_engine = SelectorEngine(page)
-    
-    # 使用不同类型的选择器
-    login_button = await selector_engine.find_element('id:login-button')
-    username_input = await selector_engine.find_element('name:username')
-    error_messages = await selector_engine.find_elements('.error-message')
-    
-    # XPath 选择器
-    specific_div = await selector_engine.find_element('xpath://div[@data-test="example"]')
+# 运行特定测试函数
+pytest tests/test_workflow_editor.py::test_create_workflow
 ```
-
-#### 错误处理和日志记录
-
-选择器系统提供详细的错误处理和日志记录：
-
-- `InvalidSelectorError`：当选择器语法或类型不正确时抛出，例如 XPath 选择器未以 '//' 或 '(' 开头。
-- `ElementNotFoundError`：当无法找到匹配的元素时抛出，例如使用 XPath 选择器未找到元素。
-
-日志记录包括：
-- `DEBUG`：记录详细的选择器查找过程，例如 "XPath 选择器查找单个元素: {selector}"。
-- `INFO`：记录成功找到元素的信息，例如 "成功找到 XPath 元素: {selector}" 或 "成功找到 {len(elements)} 个 XPath 元素: {selector}"。
-- `WARNING`：记录未找到元素的警告信息，例如 "未找到匹配 XPath 选择器的元素: {selector}"。
-- `ERROR`：记录选择器处理过程中的严重错误。
 
 ## 贡献
 欢迎提交 Issue 和 Pull Request。
